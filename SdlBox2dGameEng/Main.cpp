@@ -1,5 +1,6 @@
-/*This source code copyrighted by Lazy Foo' Productions (2004-2020)
-and may not be redistributed without written permission.*/
+// Program to get Box2D collision detection working with SDL libary (which includes OpenGL and FreeGlut graphics libraries)
+// 9/12/2021
+
 
 // SDL Install: https://lazyfoo.net/tutorials/SDL/01_hello_SDL/windows/msvc2019/index.php
 // SDL OpenGL install: https://lazyfoo.net/tutorials/OpenGL/01_hello_opengl/index.php
@@ -23,24 +24,28 @@ and may not be redistributed without written permission.*/
 #define dbg(x) std::cout << #x << ": " << (x) << "   ";
 #define dbgln(x) std::cout << #x << ": " << (x) << std::endl;
 
-//Screen dimension constants
 const int SCREEN_WIDTH = 640;
 const int SCREEN_HEIGHT = 480;
-const int SCREEN_FPS = 30;
-const float M2P = 20.0f;		// Meters to pixels
-const float P2M = 1.0f / M2P;	// Pixels to meters 
-b2World* world;
+const int SCREEN_FRAMES_PER_SECOND = 30;
+const float MetersToPixels = 40.0f;		// Meters to pixels
+const float PixelsToMeters = 1.0f / MetersToPixels;	// Pixels to meters 
 
-b2Body* addRect(float x, float y, float w, float h, bool dyn = true)
+b2World* world;   // The Box2D world of objects
+
+// Purpose: Add a new rectangle to the (Box2D) world of object.
+//   dynamic_object: 
+//       - if true the object bounce around in the physical world.  
+//       - If false the object is "static" and acts like a ridgid, fixed platform (that probably never moves in the scene).
+b2Body* addRectToWorld(float x, float y, float width, float height, bool dynamic_object = true)
 {
    b2BodyDef bodydef;
-   bodydef.position.Set(x * P2M, y * P2M);
-   bodydef.type = (dyn) ? b2_dynamicBody : b2_staticBody;
+   bodydef.position.Set(x * PixelsToMeters, y * PixelsToMeters);
+   bodydef.type = (dynamic_object) ? b2_dynamicBody : b2_staticBody;
 
    b2Body* body = world->CreateBody(&bodydef);
 
-   b2PolygonShape shape;
-   shape.SetAsBox(P2M * w / 2, P2M * h / 2);
+   b2PolygonShape shape;   // Polygons seem to be limited to 8 verticies
+   shape.SetAsBox(PixelsToMeters * width / 2, PixelsToMeters * height / 2);
 
    b2FixtureDef fixture_def;
    fixture_def.shape = &shape;
@@ -50,76 +55,74 @@ b2Body* addRect(float x, float y, float w, float h, bool dyn = true)
    return body;
 }
 
+// Purpose: Draw a square. Assumes 4 vertex points using OpenGl
 void drawSquare(b2Vec2* points, b2Vec2 center, float angle)
 {
    glColor3f(1.0, 1.0f, 1.0f);
    glPushMatrix();
-   glTranslatef(center.x * M2P, center.y * M2P, 0.0f);
+   glTranslatef(center.x * MetersToPixels, center.y * MetersToPixels, 0.0f);
    glRotatef(angle * 180.0f / (float) M_PI, 0.0f, 0.0f, 1.0f);
    glBegin(GL_QUADS);
    for (int i = 0; i < 4; ++i)
-      glVertex2f(points[i].x * M2P, points[i].y * M2P);
+      glVertex2f(points[i].x * MetersToPixels, points[i].y * MetersToPixels);
 
    glEnd();
    glPopMatrix();
 }
 
+// Purpose: Render the graphics to hidden display buffer, and then swap buffers to show the new display
 void render()
 {
-   glClear(GL_COLOR_BUFFER_BIT); //Clear color buffer
+   glClear(GL_COLOR_BUFFER_BIT); // Clear the hidden (color) buffer with the glClearColor() we setup at initGL() 
 
-   b2Body* tmp = world->GetBodyList();
+   b2Body* body_node_ptr = world->GetBodyList(); // Get the head of list of bodies in the Box2D world
 
-   b2Vec2 points[4];
 
-   while (tmp != nullptr)
+   while (body_node_ptr != nullptr)
    {
+      b2Vec2 points[4]; // Assumes a (4 vertex) rectangle!
+
       // Get points assuming a rectangle 
       for (int i = 0; i < 4; ++i)
-         points[i] = ((b2PolygonShape*)tmp->GetFixtureList()->GetShape())->m_vertices[i];
+         points[i] = ((b2PolygonShape*)body_node_ptr->GetFixtureList()->GetShape())->m_vertices[i];
 
-      drawSquare(points, tmp->GetWorldCenter(), tmp->GetAngle());
-      tmp = tmp->GetNext();
+      drawSquare(points, body_node_ptr->GetWorldCenter(), body_node_ptr->GetAngle());
+
+      body_node_ptr = body_node_ptr->GetNext(); // Get the next body in the world
    }
 
-   glutSwapBuffers();
+   glutSwapBuffers();   // Swap the hidden buffer with the old to show the new display buffer
 }
 
-void initWorld ()
+// Purpose: Initialize the Box2D world and create/place the static objects.
+void initBox2DWorld ()
 {
-   // @@@ Continue at 9:16 of the video
-   // @@@ Continue here 
-
-   //glMatrixMode(GL_PROJECTION);
-   //   glOrtho(0, SCREEN_WIDTH, SCREEN_HEIGHT, 0, -1, 1);
-
-   //glMatrixMode(GL_MODELVIEW);
-   //glColor4f(0.0f, 0.0f, 0.0f, 1.0f);
-
    world = new b2World(b2Vec2 (0.0f, 9.81f));
-   addRect(SCREEN_WIDTH / 2, SCREEN_HEIGHT - 50, SCREEN_WIDTH, 30, false);
+
+   // Add a static platform where boxes will land and stop.
+   addRectToWorld(SCREEN_WIDTH / 2, SCREEN_HEIGHT - 50, SCREEN_WIDTH, 30, false /*not dynamic, so static*/);
 }
 
 
-bool initGL()
+// Purpose:  Intialize the OpenGL graphics for what we want to use for this game/demo
+bool initOurOpenGLOptions()
 {
-   //Set the viewport
-   glViewport(0, 0, SCREEN_WIDTH, SCREEN_HEIGHT);
+   glViewport(0, 0, SCREEN_WIDTH, SCREEN_HEIGHT); //Set the viewport
 
-   //Initialize Projection Matrix
+   // Initialize Projection Matrix
    glMatrixMode(GL_PROJECTION);
    glLoadIdentity();
    glOrtho(0.0, SCREEN_WIDTH, SCREEN_HEIGHT, 0.0, 1.0, -1.0);
 
-   //Initialize Modelview Matrix
+   // Initialize Modelview Matrix
    glMatrixMode(GL_MODELVIEW);
    glLoadIdentity();
 
-   //Initialize clear color
-   glClearColor(0.f, 0.f, 0.f, 1.f);
+   // Initialize clear color (i.e. clear the hidden buffer to black when we render the next display buffer)
+   glClearColor(0.f, 0.f, 0.f, 1.f);   // RGB to black, with an Alpha of 1.0 so non-transparent
 
    //Enable texturing
-   glEnable(GL_TEXTURE_2D);
+   glEnable(GL_TEXTURE_2D);   // Probably not needed
 
    //Set blending
    glEnable(GL_BLEND);
@@ -134,77 +137,34 @@ bool initGL()
       return false;
    }
 
-   //Initialize DevIL and DevILU
-   // ilInit();
-   // iluInit();
-   // ilClearColour(255, 255, 255, 000);
-
-   //Check for error
-   //ILenum ilError = ilGetError();
-   //if (ilError != IL_NO_ERROR)
-   //{
-   //   printf("Error initializing DevIL! %s\n", iluErrorString(ilError));
-   //   return false;
-   //}
-
    return true;
 }
 
+// Purpose: Update the position of objects/bodies in the world
 void update()
 {
-   world->Step(1.0f/SCREEN_FPS, 8, 3);
-
-   //Rotate
-   //gAngle += 360.f / SCREEN_FPS;
-
-   ////Cap angle
-   //if (gAngle > 360.f)
-   //{
-   //   gAngle -= 360.f;
-   //}
+   world->Step(1.0f/SCREEN_FRAMES_PER_SECOND /*amount of time that passed*/, 
+      5 /*magic number*/, 5 /*magic number*/);  // I guess these numbers affect accuracy and overhead of collision detection and position calculations.
 }
 
+// Pupose: Run the main render loop
 void runMainLoop(int val)
 {
-   static bool added_first = false;
-   if (!added_first)
-   {
-      added_first = true;
-         addRect(100, 100, 20 /*width*/, 20 /*height*/, true);
-   }
+   update();   // Update the position of objects/bodies in the world
 
-   SDL_Event event;
-   while (SDL_PollEvent(&event))
-   {
-      switch (event.type)
-      {
-      case SDL_QUIT:
-         // @@ running = false;
-         break;
-      case SDL_KEYDOWN:
-         switch (event.key.keysym.sym)
-         {
-         case SDLK_ESCAPE:
-            // @@ running = false;
-            break;
-         }
-         break;
-      case SDL_MOUSEBUTTONDOWN:
-         addRect((float)event.button.x, (float) event.button.y, 20 /*width*/, 20 /*height*/, true);
-         break;
-      }
-   }
+   render();   // Render the next display/frame (and swap to the newly drawn frame)
 
-   update();
-   render();
-   glutTimerFunc(1000 / SCREEN_FPS, runMainLoop, val); //Run frame one more time
+   // Setup a timer (in millseconds), then call the runMainLoop() function again. 
+   //  val - is just a user provided value so the user can (potentially) identify the reason a timer when off
+   glutTimerFunc(1000 / SCREEN_FRAMES_PER_SECOND, runMainLoop, val); //Run frame one more time
 }
 
+// Purpose: Callback when a mouse event occurs (assuming it was registered with glutMouseFunc())
 void mouseEventCallback (int button, int state, int screen_x, int screen_y)
 {
    if (button == GLUT_LEFT_BUTTON && state == GLUT_DOWN)
    {
-      addRect((float) screen_x, (float) screen_y, 20 /*width*/, 20 /*height*/, true);
+      addRectToWorld((float) screen_x, (float) screen_y, 20 /*width*/, 20 /*height*/, true);
    }
 
    // Other callbacks include
@@ -213,18 +173,18 @@ void mouseEventCallback (int button, int state, int screen_x, int screen_y)
    //glutKeyboardUpFunc(keyboard_up); // when a key goes up 
    //glutPassiveMotionFunc(look);// when the mouse moved
    //glutMotionFunc(drag);// when the mouse drags around 
-
 }
 
-void keyboardEventCallback(unsigned char key, int x, int y)
+// Purpose: Callback when a key is pressed
+void keyboardEventCallback(unsigned char key, int where_mouse_is_x, int where_mouse_is_y)
 {
-   dbg(__func__); dbg(x); dbg(y); dbgln(key);
+   dbg(__func__); dbg(where_mouse_is_x); dbg(where_mouse_is_y); dbgln(key);   // Just printer out the key
 }
 
 int main(int argc, char* args[])
 {
+   // Init FreeGlut
    glutInit(&argc, args); //Initialize FreeGLUT
-
    glutInitContextVersion(2, 1); //Create OpenGL 2.1 context
 
     //Create Double Buffered Window
@@ -232,90 +192,29 @@ int main(int argc, char* args[])
    glutInitWindowSize(SCREEN_WIDTH, SCREEN_HEIGHT);
    glutCreateWindow("OpenGL");
 
-   //Do post window/context creation initialization
-   if (!initGL())
+   // Init OpenGL
+   if (!initOurOpenGLOptions())
    {
       printf("Unable to initialize graphics library!\n");
       exit (1);
    }
 
-   initWorld ();  // Init Box2D stuff
+   // Init Box2D world and static object in the world
+   initBox2DWorld ();
+
 
    glutDisplayFunc(render);
    glutMouseFunc(mouseEventCallback);
    glutKeyboardFunc(keyboardEventCallback);
 
-   glutTimerFunc(1000 / SCREEN_FPS, runMainLoop, 0); //Set main loop
+   // Setup a timer (in millseconds), then call the runMainLoop() function. 
+   //  val - is just a user provided value so the user can (potentially) identify the reason a timer when off
+   glutTimerFunc(1000 / SCREEN_FRAMES_PER_SECOND, runMainLoop, 0 /*val*/);
+
+   // Run the world.
    glutMainLoop(); //Start GLUT main loop
 
-   ////The window we'll be rendering to
-   //SDL_Window* window = NULL;
-
-   ////The surface contained by the window
-   //SDL_Surface* screenSurface = NULL;
-
-   ////Initialize SDL
-   //if (SDL_Init(SDL_INIT_EVERYTHING) < 0)
-   //{
-   //   printf("SDL could not initialize! SDL_Error: %s\n", SDL_GetError());
-   //   exit(1);
-   //}
-   //// @@@ SDL_SetVideoMode(640, 480, 32, SDL_OPENGL);
-
-   ////Create window
-   //window = SDL_CreateWindow("SDL Tutorial", SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED, SCREEN_WIDTH, SCREEN_HEIGHT, SDL_WINDOW_SHOWN);
-   //if (window == NULL)
-   //{
-   //   printf("Window could not be created! SDL_Error: %s\n", SDL_GetError());
-   //   exit(1);
-   //}
-
-   ////Get window surface
-   //screenSurface = SDL_GetWindowSurface(window);
-
-   ////Fill the surface white
-   //SDL_FillRect(screenSurface, NULL, SDL_MapRGB(screenSurface->format, 0xFF, 0xFF, 0xFF));
-
-
-   //Update the surface
-   // SDL_UpdateWindowSurface(window);
-
-   //SDL_Event event;
-   //bool running = true;
-
-   //while (running)
-   //{
-   //   Uint32 start = SDL_GetTicks();
-
-   //   while (SDL_PollEvent(&event))
-   //   {
-   //      switch (event.type)
-   //      {
-   //      case SDL_QUIT:
-   //         running = false;
-   //         break;
-   //      case SDL_KEYDOWN:
-   //         switch (event.key.keysym.sym)
-   //         {
-   //         case SDLK_ESCAPE:
-   //            running = false;
-   //            break;
-   //         }
-   //         break;
-   //      case SDL_MOUSEBUTTONDOWN:
-   //         addRect(event.button.x, event.button.y, 20 /*width*/, 20 /*height*/, true);
-   //         break;
-   //      }
-   //   }
-   //   render ();
-   //   world->Step(1.0/30.0, 8, 3);
-
-   //   if (1000.0 / 30 > SDL_GetTicks() - start)
-   //      SDL_Delay(1000.0 / 30 - SDL_GetTicks() - start);
-   //}
-
-   //Quit SDL subsystems
-   SDL_Quit();
+   SDL_Quit(); //Quit/cleanup SDL subsystems
 
    return 0;
 }
