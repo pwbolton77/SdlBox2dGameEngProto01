@@ -211,6 +211,11 @@ int main(int argc, char* args[])
    //  val - is just a user provided value so the user can (potentially) identify the reason a timer when off
    glutTimerFunc(1000 / SCREEN_FRAMES_PER_SECOND, runMainLoop, 0 /*val*/);
 
+   std::cout << std::endl;
+   std::cout << "Instructions:" << std::endl;
+   std::cout << " Click mouse in window to create a block that falls" << std::endl;
+
+
    // Run the world.
    glutMainLoop(); //Start GLUT main loop
 
